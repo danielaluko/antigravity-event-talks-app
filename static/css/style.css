@@ -646,6 +646,29 @@ input:checked + .slider:before {
     transition: var(--transition-fast);
 }
 
+/* Unread dot indicator */
+.unread-dot {
+    width: 8px;
+    height: 8px;
+    background-color: var(--color-primary);
+    border-radius: 50%;
+    display: inline-block;
+    box-shadow: 0 0 6px var(--color-primary);
+    flex-shrink: 0;
+}
+
+/* Deep link card pulse highlight */
+@keyframes pulse-highlight {
+    0% { box-shadow: 0 0 0 0 var(--color-primary); }
+    70% { box-shadow: 0 0 0 10px rgba(29, 155, 240, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(29, 155, 240, 0); }
+}
+
+.update-section.hash-highlight {
+    animation: pulse-highlight 2s ease-out;
+    border: 2px solid var(--color-primary) !important;
+}
+
 .btn-card-action:hover {
     color: #fff;
     border-color: var(--color-text-secondary);

@@ -4,6 +4,7 @@ let filteredReleases = [];
 let activeFilter = 'all';
 let searchQuery = '';
 let selectedUpdateId = null;
+let readUpdateIds = JSON.parse(localStorage.getItem('readReleases') || '[]');
 
 // DOM Elements
 const refreshBtn = document.getElementById('refresh-btn');
@@ -78,15 +79,82 @@ function stripHtml(html) {
 }
 
 // Utility: Copy note card text to clipboard
-async function copyCardText(bodyHtml, event) {
+async function copyCardText(bodyHtml, event, secId) {
     if (event) event.stopPropagation(); // Prevent card selection
     const cleanText = stripHtml(bodyHtml).trim();
     try {
         await navigator.clipboard.writeText(cleanText);
         showToast('Note copied to clipboard!', 'success');
+        if (secId) markAsRead(secId);
     } catch (err) {
         console.error(err);
         showToast('Failed to copy note.', 'error');
+    }
+}
+
+// Utility: Copy deep link to a specific release note card
+function copyCardLink(secId, event) {
+    if (event) event.stopPropagation();
+    
+    const url = new URL(window.location.href);
+    url.hash = secId;
+    
+    navigator.clipboard.writeText(url.toString())
+        .then(() => {
+            showToast('Direct link copied to clipboard!', 'success');
+            markAsRead(secId);
+        })
+        .catch(err => {
+            console.error(err);
+            showToast('Failed to copy link.', 'error');
+        });
+}
+
+// Utility: Mark a specific release note section as read
+function markAsRead(secId) {
+    if (!readUpdateIds.includes(secId)) {
+        readUpdateIds.push(secId);
+        localStorage.setItem('readReleases', JSON.stringify(readUpdateIds));
+        
+        // Remove dot visually from UI
+        const element = document.getElementById(secId);
+        if (element) {
+            const dot = element.querySelector('.unread-dot');
+            if (dot) dot.remove();
+        }
+    }
+}
+
+// Utility: Check hash in URL and scroll/load selection
+function checkHashAndScroll() {
+    const hash = window.location.hash;
+    if (hash) {
+        const elementId = hash.substring(1);
+        
+        if (allReleases.length === 0) return;
+        
+        const parts = elementId.split('_section_');
+        if (parts.length === 2) {
+            const entryId = parts[0];
+            const secIdx = parseInt(parts[1], 10);
+            const entry = allReleases.find(e => e.id === entryId);
+            if (entry && entry.sections[secIdx]) {
+                const sec = entry.sections[secIdx];
+                
+                selectUpdateForTweet(entry.date_str, sec.type, sec.body, entry.link, elementId);
+                
+                setTimeout(() => {
+                    const targetElement = document.getElementById(elementId);
+                    if (targetElement) {
+                        targetElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        targetElement.classList.add('hash-highlight');
+                        setTimeout(() => {
+                            targetElement.classList.remove('hash-highlight');
+                        }, 2000);
+                    }
+                }, 400);
+            }
+        }
     }
 }
 
@@ -147,6 +215,9 @@ async function fetchReleaseNotes(forceRefresh = false) {
         
         // Filter and render
         applyFiltersAndSearch();
+        
+        // Check if deep link scroll is needed
+        checkHashAndScroll();
         
         if (data.error) {
             showToast(data.error, 'error');
@@ -328,13 +399,23 @@ function renderFeed() {
                 iconClass = 'fa-solid fa-triangle-exclamation';
             }
             
+            // Determine read status and render dot
+            const isRead = readUpdateIds.includes(secId);
+            const unreadDot = isRead ? '' : '<span class="unread-dot" title="Unread Update"></span>';
+
             // Setup Section Content
             updateSec.innerHTML = `
                 <div class="section-meta">
-                    <span class="badge ${badgeClass}"><i class="${iconClass}"></i> ${highlightText(sec.type, searchQuery)}</span>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        ${unreadDot}
+                        <span class="badge ${badgeClass}"><i class="${iconClass}"></i> ${highlightText(sec.type, searchQuery)}</span>
+                    </div>
                     <div class="section-actions">
-                        <button class="btn-card-action btn-card-copy" title="Copy update to clipboard" onclick="copyCardText(\`${escapeHtml(sec.body)}\`, event)">
+                        <button class="btn-card-action btn-card-copy" title="Copy update to clipboard" onclick="copyCardText(\`${escapeHtml(sec.body)}\`, event, '${secId}')">
                             <i class="fa-regular fa-copy"></i> Copy Note
+                        </button>
+                        <button class="btn-card-action btn-card-link" title="Copy link to this specific update" onclick="copyCardLink('${secId}', event)">
+                            <i class="fa-solid fa-link"></i> Link
                         </button>
                         <button class="btn-card-action btn-card-tweet" title="Tweet this specific update" onclick="selectUpdateForTweet('${entry.date_str}', '${sec.type}', \`${escapeHtml(sec.body)}\`, '${entry.link}', '${secId}', event)">
                             <i class="fa-brands fa-x-twitter"></i> Select to Tweet
@@ -383,6 +464,7 @@ function selectUpdateForTweet(dateStr, type, bodyHtml, link, secId, event) {
     }
     
     selectedUpdateId = secId;
+    markAsRead(secId);
     
     // Highlight active card
     document.querySelectorAll('.update-section').forEach(card => {
@@ -613,6 +695,54 @@ function setupEventListeners() {
 
     // Export to CSV click listener
     exportCsvBtn.addEventListener('click', exportToCSV);
+
+    // Keyboard navigation shortcuts
+    document.addEventListener('keydown', (e) => {
+        // Avoid capturing hotkeys when user is actively typing in inputs
+        if (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA') {
+            if (e.key === 'Escape') {
+                document.activeElement.blur();
+            }
+            return;
+        }
+        
+        // '/' focuses search input
+        if (e.key === '/') {
+            e.preventDefault();
+            searchInput.focus();
+            searchInput.select();
+        }
+        
+        // 'Escape' clears selection & search text
+        if (e.key === 'Escape') {
+            clearSelection();
+            if (searchInput.value) {
+                searchInput.value = '';
+                searchQuery = '';
+                clearSearchBtn.style.display = 'none';
+                applyFiltersAndSearch();
+            }
+        }
+        
+        // 'c' or 'C' copies selected update's body
+        if ((e.key === 'c' || e.key === 'C') && selectedUpdateId) {
+            const activeCard = document.getElementById(selectedUpdateId);
+            if (activeCard) {
+                const copyBtn = activeCard.querySelector('.btn-card-copy');
+                if (copyBtn) copyBtn.click();
+            }
+        }
+        
+        // 't' or 'T' opens Twitter publish dialog for selected update
+        if ((e.key === 't' || e.key === 'T') && selectedUpdateId) {
+            if (!publishTweetBtn.classList.contains('disabled')) {
+                publishTweetBtn.click();
+            }
+        }
+    });
+
+    // Listen for URL hash updates
+    window.addEventListener('hashchange', checkHashAndScroll);
 }
 
 // Page load initialization
