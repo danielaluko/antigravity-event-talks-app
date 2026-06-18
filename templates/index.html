@@ -29,6 +29,16 @@
             </div>
             
             <div class="header-actions">
+                <!-- Theme Switch Toggle -->
+                <div class="theme-switch-container">
+                    <i class="fa-solid fa-moon theme-icon"></i>
+                    <label class="switch" aria-label="Toggle Theme">
+                        <input type="checkbox" id="theme-toggle">
+                        <span class="slider round"></span>
+                    </label>
+                    <i class="fa-solid fa-sun theme-icon"></i>
+                </div>
+                
                 <div class="status-indicator">
                     <span class="indicator-dot"></span>
                     <span id="last-updated-text">Synced: Loading...</span>
@@ -84,14 +94,20 @@
                     </div>
                     
                     <div class="tags-filter-container">
-                        <span class="filter-label">Filter Type:</span>
-                        <div class="filter-tags" id="filter-tags-list">
-                            <button class="tag-filter-btn active" data-type="all">All</button>
-                            <button class="tag-filter-btn" data-type="feature">Features</button>
-                            <button class="tag-filter-btn" data-type="announcement">Announcements</button>
-                            <button class="tag-filter-btn" data-type="deprecation">Deprecations</button>
-                            <button class="tag-filter-btn" data-type="other">Others</button>
+                        <div class="filter-group">
+                            <span class="filter-label">Filter Type:</span>
+                            <div class="filter-tags" id="filter-tags-list">
+                                <button class="tag-filter-btn active" data-type="all">All</button>
+                                <button class="tag-filter-btn" data-type="feature">Features</button>
+                                <button class="tag-filter-btn" data-type="announcement">Announcements</button>
+                                <button class="tag-filter-btn" data-type="deprecation">Deprecations</button>
+                                <button class="tag-filter-btn" data-type="other">Others</button>
+                            </div>
                         </div>
+                        <button id="export-csv-btn" class="btn btn-secondary" title="Export visible notes to CSV">
+                            <i class="fa-solid fa-file-csv"></i>
+                            <span>Export CSV</span>
+                        </button>
                     </div>
                 </div>
 

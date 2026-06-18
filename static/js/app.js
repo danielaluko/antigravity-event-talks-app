@@ -19,6 +19,8 @@ const errorMessage = document.getElementById('error-message');
 const emptyState = document.getElementById('feed-empty-state');
 const retryBtn = document.getElementById('retry-btn');
 const resetFiltersBtn = document.getElementById('reset-filters-btn');
+const themeToggle = document.getElementById('theme-toggle');
+const exportCsvBtn = document.getElementById('export-csv-btn');
 
 // Stats Counters
 const countTotal = document.getElementById('count-total');
@@ -73,6 +75,53 @@ function stripHtml(html) {
     headers.forEach(h => h.remove());
     
     return tempDiv.textContent || tempDiv.innerText || "";
+}
+
+// Utility: Copy note card text to clipboard
+async function copyCardText(bodyHtml, event) {
+    if (event) event.stopPropagation(); // Prevent card selection
+    const cleanText = stripHtml(bodyHtml).trim();
+    try {
+        await navigator.clipboard.writeText(cleanText);
+        showToast('Note copied to clipboard!', 'success');
+    } catch (err) {
+        console.error(err);
+        showToast('Failed to copy note.', 'error');
+    }
+}
+
+// Utility: Export visible/filtered release notes to CSV
+function exportToCSV() {
+    if (filteredReleases.length === 0) {
+        showToast('No release notes to export!', 'error');
+        return;
+    }
+    
+    let csvRows = [];
+    // Add Headers
+    csvRows.push(['Date', 'Category', 'Update Details', 'Link'].map(h => `"${h}"`).join(','));
+    
+    filteredReleases.forEach(entry => {
+        entry.sections.forEach(sec => {
+            const date = entry.date_str;
+            const type = sec.type;
+            const body = stripHtml(sec.body).replace(/\s+/g, ' ').replace(/"/g, '""').trim();
+            const link = entry.link;
+            
+            csvRows.push([`"${date}"`, `"${type}"`, `"${body}"`, `"${link}"`].join(','));
+        });
+    });
+    
+    const csvContent = "data:text/csv;charset=utf-8," + csvRows.join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `bigquery_release_notes_${activeFilter}_export.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    showToast('CSV Exported successfully!', 'success');
 }
 
 // Fetch releases from local Flask API
@@ -284,6 +333,9 @@ function renderFeed() {
                 <div class="section-meta">
                     <span class="badge ${badgeClass}"><i class="${iconClass}"></i> ${highlightText(sec.type, searchQuery)}</span>
                     <div class="section-actions">
+                        <button class="btn-card-action btn-card-copy" title="Copy update to clipboard" onclick="copyCardText(\`${escapeHtml(sec.body)}\`, event)">
+                            <i class="fa-regular fa-copy"></i> Copy Note
+                        </button>
                         <button class="btn-card-action btn-card-tweet" title="Tweet this specific update" onclick="selectUpdateForTweet('${entry.date_str}', '${sec.type}', \`${escapeHtml(sec.body)}\`, '${entry.link}', '${secId}', event)">
                             <i class="fa-brands fa-x-twitter"></i> Select to Tweet
                         </button>
@@ -547,10 +599,35 @@ function setupEventListeners() {
     // Copy/Clear compose events
     copyTweetBtn.addEventListener('click', copyTweetToClipboard);
     clearSelectionBtn.addEventListener('click', clearSelection);
+
+    // Theme switch toggle listener
+    themeToggle.addEventListener('change', () => {
+        if (themeToggle.checked) {
+            document.body.classList.add('light-mode');
+            localStorage.setItem('theme', 'light');
+        } else {
+            document.body.classList.remove('light-mode');
+            localStorage.setItem('theme', 'dark');
+        }
+    });
+
+    // Export to CSV click listener
+    exportCsvBtn.addEventListener('click', exportToCSV);
 }
 
 // Page load initialization
 document.addEventListener('DOMContentLoaded', () => {
+    // Check theme settings before fetching
+    const themeToggle = document.getElementById('theme-toggle');
+    const savedTheme = localStorage.getItem('theme');
+    if (savedTheme === 'light') {
+        themeToggle.checked = true;
+        document.body.classList.add('light-mode');
+    } else {
+        themeToggle.checked = false;
+        document.body.classList.remove('light-mode');
+    }
+
     setupEventListeners();
     fetchReleaseNotes(false);
     updateTweetStats(); // Init character counter progress circle
